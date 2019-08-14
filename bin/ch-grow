@@ -102,7 +102,6 @@ cli = None
 # Image state object.
 state = None
 
-
 ## Main ##
 
 def main():
@@ -277,6 +276,19 @@ class Copy(Instruction):
       # 3. Spec does not say what to do with symlinks. If the source is a
       #    symlink to a file, we copy the link target to a regular file;
       #    otherwise, we copy symlinks themselves.
+      
+      if cache_valid:
+         # Search the cache of the base image for an image with the same instruction
+         # Returns a layer object
+         layer = cache.search(Instruction):
+         if layer:
+            # Compare current image and the matching layer
+            if compare_files(dir_image(), layer):
+               # Update the current container with the layer
+               cache.load(layer)
+	 else:
+	    cache.add_layer()
+
       srcs = itertools.chain.from_iterable(glob.glob(cli.context + "/" + i)
                                            for i in self.srcs)
       dst = dir_image(cli.tag) + "/"
@@ -438,7 +450,9 @@ class I_from_(Instruction):
          DEBUG("image not found, pulling: %s" % self.fullname)
          self.base_pull()
       self.base_copy()
-      state.reset()
+      # Look to see if we have a cache for this image
+      cache.init(self.fullname)
+            state.reset()
 
    def str_(self):
       alias = "AS %s" % self.alias if self.alias else ""
@@ -448,6 +462,18 @@ class I_from_(Instruction):
 class Run(Instruction):
 
    def execute_(self):
+      cache.
+      if cache_valid:
+         # Search the cache of the base image for an image with the same instruction
+         # Returns a layer object
+	 
+         layer = cache.search(Instruction):
+         if layer:
+             # Compare current image and the matching layer
+             if compare_files(dir_image(), layer):
+                 # Update the current container with the layer
+                 cache.load(layer)
+
       rootfs = dir_image(cli.tag)
       pathlib.Path(rootfs + "/etc/resolv.conf").touch(exist_ok=True)
       pathlib.Path(rootfs + "/etc/hosts").touch(exist_ok=True)
@@ -513,6 +539,65 @@ class State(object):
       self.arg = { k: v for (k, v) in ARG_DEFAULTS.items() if v is not None }
       self.env = { k: v for (k, v) in ENV_DEFAULTS.items() if v is not None }
 
+class Cache(object):
+
+    def __init__(self):
+        self.valid = False
+	self.repo = None
+
+    # Get cache for image or create a repo if it doesnt exist
+    def get_image(self):
+      if os.path.isdir(dir_cache(self.fullname)):
+         # Declare cache as valid
+         cache.valid = True
+      else:
+	 # Need to create a Gnome IO File object for all parth arguments
+	 repo_file = Gio.File.new_for_path(repo_path)
+	 # Creating the repo doesn't do anything it needs to be initialized
+	 self.repo = OSTree.Repo.new(repo_file)
+	 self.repo.create(OSTree.RepoMode.ARCHIVE) 
+      
+    # Look for an image in cache that used this instruction
+    def search(self, instruction): 
+
+    def load(self):
+       # Write to the current image  
+       # We're going to use checkout_at. This requires setting up a checkout options structure
+       options = OSTree.RepoCheckoutAtOptions()
+       # This options is important for docker/OCI support according to:
+       # https://github.com/ostreedev/ostree/blob/615861443be250cba16d674a6b3c7f96c8b842de/src/libostree/ostree-repo-checkout.c#L250
+       options.process_whiteouts = True
+       # This mode overwrites files but does not modify directories unless the previous whiteout option is enabled
+       options.overwrite_mode = OSTree.RepoCheckoutOverwriteMode.UNION_FILES
+       # Need a file descriptor to the directory we're writing the commits to
+       image_fd = os.open(dir_image, os.O_DIRECTORY)
+       self.repo.checkout_at(options, image_fd, dir_image, layer_commit)
+       
+    # Add a layer to the cache for a base image
+    def add_layer(self):
+       # Must start a transaction before writing to a repo
+       # NOTE: Can only have one active transaction on a repo at a time
+       # See: https://lazka.github.io/pgi-docs/index.html#OSTree-1.0/classes/Repo.html#OSTree.Repo.prepare_transaction
+       self.repo.prepare_transaction()
+       # Must write all changes to a mutable tree (mtree) which committed to repo
+       mtree = OSTree.MutableTree.new()
+       # Create some metatdata
+       metadata = GLib.VariantDict.new(None)
+       metadata.insert_value('Charliecloud.version', GLib.Variant('s', "0.11"))
+       # Need to provide a Gio object everytime we give a path
+       layer_file = Gio.File.new_for_path(dir_image())
+       # Write this directory to the mtree
+       repo.write_directory_to_mtree(layer_file, mtree)
+       # Need to capture the output RepoFile when we write the mtree
+       layer_commit = repo.write_mtree(mtree)[1]
+       # Write the commit to the repo
+       checksum = repo.write_commit(None, '', '', metadata.end(), layer_commit, None)[1]
+       # Set ref must be used for transaction to be written out upon committing
+       # Further described here: https://lazka.github.io/pgi-docs/OSTree-1.0/classes/Repo.html#OSTree.Repo.transaction_set_ref
+       self.repo.transaction_set_ref(None, layer_id, checksum)
+       # Transaction must be comitted to repo
+       self.repo.commit_transaction(None)
+    
 class Version(argparse.Action):
 
    # This gross kludge lets us print the version number without managing a
@@ -573,6 +658,12 @@ def dir_images():
 
 def dir_image(image):
    return "%s/%s" % (dir_images(), image)
+
+def dir_cache():
+   return "%s/cache" % cli.storage
+
+def dir_image_cache():
+   return "%s/%s" % (dir_cache(), image)
 
 def dir_ocis():
    return "%s/oci" % cli.storage
@@ -637,6 +728,9 @@ def terminal(tree, type_, index=0):
       if (i == index):
          return t
    return None
+
+def compare_files():
+   pass
 
 def terminals(tree, type_):
    for i in tree.children:
