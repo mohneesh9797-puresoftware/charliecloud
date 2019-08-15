@@ -289,11 +289,12 @@ class Copy(Instruction):
       # 3. Spec does not say what to do with symlinks. If the source is a
       #    symlink to a file, we copy the link target to a regular file;
       #    otherwise, we copy symlinks themselves.
-      
+
+     
       if cache.valid:
          # Search the cache of the base image for an image with the same instruction
          # Returns a layer object
-         layer = cache.search("an instructon from Copy")
+         layer = cache.search(instruction)
          if layer:
             # Compare current image and the matching layer
             if compare_files(dir_image(), layer):
@@ -303,6 +304,12 @@ class Copy(Instruction):
       srcs = itertools.chain.from_iterable(glob.glob(cli.context + "/" + i)
                                            for i in self.srcs)
       dst = dir_image(cli.tag) + "/"
+
+      instruction = "COPY"
+      for str in self.srcs:
+          instruction += " " + str
+      cache.add_instruction(instruction)
+
       if (not self.dst.startswith("/")):
          dst += state.workdir + "/"
       dst += self.dst
@@ -313,13 +320,6 @@ class Copy(Instruction):
          cp(src, dst)
       # Need to add the current state of the image at the end of each command
       #cache.add_layer(self.fullname)
-      print(dir_image(cli.tag))
-      print("COPY " + self.srcs[0], end = ' ')
-      print(self.dst)
-      #print("Source: " + self.srcs + " Dest: {}".format(*self.dst))
-      print("WUTWUT")
-      #print("COPPPPP " + self.fullname)
-
 
 class I_copy_shell(Copy):
 
@@ -350,8 +350,11 @@ class Arg(Instruction):
          return "%s='%s'" % (self.key, self.value)
 
    def execute_(self):
+      instruction = "ARG"
       if (self.value is not None):
          state.arg[self.key] = self.value
+         instruction = "%s = %s" % (k, v)
+      cache.add_instruction(instruction)
 
 class I_arg_bare(Arg):
 
@@ -380,9 +383,11 @@ class Env(Instruction):
    def execute_(self):
       state.env[self.key] = self.value
       with open("%s/ch/environment" % dir_image(cli.tag), "wt") as fp:
+         instruction = "ENV"
          for (k, v) in state.env.items():
             print("%s=%s" % (k, v), file=fp)
-
+            instruction += " %s %s" % (k, v)
+         cache.add_instruction(instruction)
 
 class I_env_equals(Env):
 
@@ -475,10 +480,11 @@ class I_from_(Instruction):
          cache.new_image(self.fullname)
       else:
          cache.valid = True
-      #m = hashlib.sha1()
-      #m.update(self.fullname + str(time.time()))
-      #image_id = m.hexdigest()
-      #with open(dir_cache(self.fullname), "wt") as fp:
+      instruction = "FROM " + self.fullname)
+      cache.add_instructions(instruction)
+      m = hashlib.sha256(instruction.encode("utf-8")).hexdigest()
+      with open(dir_cache(self.fullname), "wt") as fp:
+         
 
       state.reset()
 
@@ -508,12 +514,11 @@ class Run(Instruction):
               "--cd", state.workdir, "--uid=0", "--gid=0",
               rootfs, "--"] + self.cmd
       cmd(args, env=state.env_build)
-      s = "RUN "
-      for str in self.cmd[2:]:
-          s += str + " "
-      print(s)
-      
-
+      instruction = "RUN"
+      for ins in self.cmd[2:]:
+         instruction += " " + ins
+      cache.add_instruction(instruction)
+      cache.compare(instruction)
 
    def str_(self):
       return str(self.cmd)
@@ -548,6 +553,9 @@ class I_workdir(Instruction):
    def execute_(self):
       mkdirs(dir_image(cli.tag) + self.path)
       state.chdir(self.path)
+      instruction = "WORKDIR " + self.path
+      cache.add_instruction(instruction)
+      cache.search(instruction)
 
 
 ## Supporting classes ##
@@ -563,7 +571,7 @@ class State(object):
 
    def chdir(self, path):
       if (path.startswith("/")):
-         self.workdir = path
+         self.norkdir = path
       else:
          self.workdir += "/" + path
 
@@ -577,7 +585,12 @@ class Cache(object):
    def __init__(self):
       self.valid = False
       self.repo = None
+      self.instructions = []
 
+   # Add the instruction to the instruction list
+   def add_instruction(self, instruction):
+       self.instructions.append(instruction)
+      
    # Create repo for a new image
    def new_image(self, image):
       pass 
