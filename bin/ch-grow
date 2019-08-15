@@ -13,6 +13,8 @@ import stat
 import subprocess
 import sys
 import types
+import hashlib
+import time
 import gi
 
 gi.require_version('OSTree', '1.0')
@@ -310,7 +312,13 @@ class Copy(Instruction):
       for src in srcs:
          cp(src, dst)
       # Need to add the current state of the image at the end of each command
-	   cache.add_layer(self.fullname)
+      #cache.add_layer(self.fullname)
+      print(dir_image(cli.tag))
+      print("COPY " + self.srcs[0], end = ' ')
+      print(self.dst)
+      #print("Source: " + self.srcs + " Dest: {}".format(*self.dst))
+      print("WUTWUT")
+      #print("COPPPPP " + self.fullname)
 
 
 class I_copy_shell(Copy):
@@ -464,11 +472,14 @@ class I_from_(Instruction):
       self.base_copy()
       # Look to see if we have a cache for this image
       if (not os.path.isdir(dir_cache(self.fullname))):
-         print("Don't have a cache for " + self.fullname + ". Making it")
          cache.new_image(self.fullname)
       else:
-         print("HAVE A CACHE!")
          cache.valid = True
+      #m = hashlib.sha1()
+      #m.update(self.fullname + str(time.time()))
+      #image_id = m.hexdigest()
+      #with open(dir_cache(self.fullname), "wt") as fp:
+
       state.reset()
 
    def str_(self):
@@ -497,6 +508,11 @@ class Run(Instruction):
               "--cd", state.workdir, "--uid=0", "--gid=0",
               rootfs, "--"] + self.cmd
       cmd(args, env=state.env_build)
+      s = "RUN "
+      for str in self.cmd[2:]:
+          s += str + " "
+      print(s)
+      
 
 
    def str_(self):
@@ -575,14 +591,15 @@ class Cache(object):
    def search(self, instruction): 
       print("Cache: Searching for " + instruction) 
       pass
-      if not found:
-          valid = False
+      #if not found:
+      #    valid = False
 
        
    # Add a layer to the cache for a base image
    def add_layer(self, image):
       print("Cache: Adding layer for " + image)
       pass 
+      return
       # Must start a transaction before writing to a repo
       # NOTE: Can only have one active transaction on a repo at a time
       # See: https://lazka.github.io/pgi-docs/index.html#OSTree-1.0/classes/Repo.html#OSTree.Repo.prepare_transaction
@@ -609,6 +626,7 @@ class Cache(object):
    def load(self, image, commit):
       print("Cache: Loading image: " + image + " with commit: " + commit)
       pass
+      return
       # Write to the current image  
       # We're going to use checkout_at. This requires setting up a checkout options structure
       options = OSTree.RepoCheckoutAtOptions()
