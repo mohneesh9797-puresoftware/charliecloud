@@ -299,7 +299,7 @@ class Copy(Instruction):
             # Compare current image and the matching layer
             if compare_files(dir_image(), layer):
                # Update the current container with the layer
-               cache.load(layer)
+               cache.checkout(layer)
 
       srcs = itertools.chain.from_iterable(glob.glob(cli.context + "/" + i)
                                            for i in self.srcs)
@@ -474,18 +474,20 @@ class I_from_(Instruction):
       if (not os.path.isdir(dir_image(self.fullname))):
          DEBUG("image not found, pulling: %s" % self.fullname)
          self.base_pull()
-      self.base_copy()
-      # Look to see if we have a cache for this image
-      if (not os.path.isdir(dir_cache(self.fullname))):
+         # Need to create new cache for this image 
+         DEBUG (dir_base_cache(self.fullname))
+         mkdirs(dir_base_cache(self.fullname) + "/images")
          cache.new_image(self.fullname)
-      else:
-         cache.valid = True
-      instruction = "FROM " + self.fullname)
-      cache.add_instructions(instruction)
-      m = hashlib.sha256(instruction.encode("utf-8")).hexdigest()
-      with open(dir_cache(self.fullname), "wt") as fp:
-         
-
+         # Since this is the first image from this base the cache is invalid
+         cache.valid = False
+      self.base_copy()
+      instruction = "FROM " + self.fullname
+      cache.add_instruction(instruction)
+      cache.set_bases(dir_base_cache(self.fullname))
+      # Combine the image name and current epoch time to create an image id
+      hash_str = self.fullname + str(time.time())
+      image_id = hashlib.sha256(hash_str.encode("utf-8")).hexdigest()
+      pathlib.Path(dir_image_cache(self.fullname, image_id)).touch(exist_ok=False)
       state.reset()
 
    def str_(self):
@@ -496,18 +498,7 @@ class I_from_(Instruction):
 class Run(Instruction):
 
    def execute_(self):
-      if cache.valid:
-         # Search the cache of the base image for an image with the same instruction
-         # Returns a layer object
-         layer = cache.search("an instruction from Run")
-         if layer:
-             # Compare current image and the matching layer
-             if compare_files(dir_image(), layer):
-                 # Update the current container with the layer
-                 cache.load(layer)
-         pass
-
-      rootfs = dir_image(cli.tag)
+            rootfs = dir_image(cli.tag)
       pathlib.Path(rootfs + "/etc/resolv.conf").touch(exist_ok=True)
       pathlib.Path(rootfs + "/etc/hosts").touch(exist_ok=True)
       args = [CH_BIN + "/ch-run", "-w", "--no-home", "--no-passwd",
@@ -517,8 +508,15 @@ class Run(Instruction):
       instruction = "RUN"
       for ins in self.cmd[2:]:
          instruction += " " + ins
-      cache.add_instruction(instruction)
-      cache.compare(instruction)
+      #cache.add_instruction(instruction)
+      if cache.valid:
+         # Search the cache of the base image for an image with the same instruction
+         # Returns a layer object
+         layer = cache.search(instruction)
+         if layer:
+            # Update the current container with the layer
+            cache.load(layer)
+
 
    def str_(self):
       return str(self.cmd)
@@ -583,36 +581,42 @@ class State(object):
 class Cache(object):
 
    def __init__(self):
-      self.valid = False
+      self.valid = True
       self.repo = None
+      self.base = None
+      self.image = None
+      self.imagename = None
       self.instructions = []
 
    # Add the instruction to the instruction list
    def add_instruction(self, instruction):
        self.instructions.append(instruction)
+       print(instruction)
       
    # Create repo for a new image
    def new_image(self, image):
       pass 
       # Need to create a Gnome IO File object for all parth arguments
-      repo_file = Gio.File.new_for_path(dir_cache(image))
+      repo_file = Gio.File.new_for_path(dir_base_cache(image))
       # Creating the repo doesn't do anything it needs to be initialized
       self.repo = OSTree.Repo.new(repo_file)
       self.repo.create(OSTree.RepoMode.ARCHIVE) 
+
+    def load()
       
    # Look for an image in cache that used this instruction
    def search(self, instruction): 
       print("Cache: Searching for " + instruction) 
-      pass
-      #if not found:
-      #    valid = False
-
+      # Look at all files in images 
+      # 
+   
+   def set_base(path):
+       self.images = path
        
    # Add a layer to the cache for a base image
-   def add_layer(self, image):
+   def add_layer(self):
       print("Cache: Adding layer for " + image)
       pass 
-      return
       # Must start a transaction before writing to a repo
       # NOTE: Can only have one active transaction on a repo at a time
       # See: https://lazka.github.io/pgi-docs/index.html#OSTree-1.0/classes/Repo.html#OSTree.Repo.prepare_transaction
@@ -623,7 +627,7 @@ class Cache(object):
       metadata = GLib.VariantDict.new(None)
       metadata.insert_value('Charliecloud.version', GLib.Variant('s', "0.11"))
       # Need to provide a Gio object everytime we give a path
-      layer_file = Gio.File.new_for_path(dir_image())
+      layer_file = Gio.File.new_for_path(image)
       # Write this directory to the mtree
       repo.write_directory_to_mtree(layer_file, mtree)
       # Need to capture the output RepoFile when we write the mtree
@@ -636,7 +640,7 @@ class Cache(object):
       # Transaction must be comitted to repo
       self.repo.commit_transaction(None)
     
-   def load(self, image, commit):
+   def checkout(self, image, commit):
       print("Cache: Loading image: " + image + " with commit: " + commit)
       pass
       return
@@ -716,8 +720,11 @@ def dir_image(image):
 def dir_caches():
    return "%s/cache" % cli.storage
 
-def dir_cache(image):
+def dir_base_cache(image):
    return "%s/%s" % (dir_caches(), image)
+
+def dir_image_cache(image, image_id):
+   return "%s/images/%s" % (dir_base_cache(image), image_id)
 
 def dir_ocis():
    return "%s/oci" % cli.storage
