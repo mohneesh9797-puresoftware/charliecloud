@@ -482,12 +482,15 @@ class I_from_(Instruction):
          cache.valid = False
       self.base_copy()
       instruction = "FROM " + self.fullname
+      # Add the instruction to the cache
       cache.add_instruction(instruction)
-      cache.set_bases(dir_base_cache(self.fullname))
+      cache.set_base(dir_base_cache(self.fullname))
       # Combine the image name and current epoch time to create an image id
       hash_str = self.fullname + str(time.time())
       image_id = hashlib.sha256(hash_str.encode("utf-8")).hexdigest()
-      pathlib.Path(dir_image_cache(self.fullname, image_id)).touch(exist_ok=False)
+      # Create a place for the image in the cache
+      # TODO should be lazily initialized
+      mkdirs(dir_image_cache(self.fullname, image_id))
       state.reset()
 
    def str_(self):
@@ -498,7 +501,7 @@ class I_from_(Instruction):
 class Run(Instruction):
 
    def execute_(self):
-            rootfs = dir_image(cli.tag)
+      rootfs = dir_image(cli.tag)
       pathlib.Path(rootfs + "/etc/resolv.conf").touch(exist_ok=True)
       pathlib.Path(rootfs + "/etc/hosts").touch(exist_ok=True)
       args = [CH_BIN + "/ch-run", "-w", "--no-home", "--no-passwd",
@@ -512,11 +515,9 @@ class Run(Instruction):
       if cache.valid:
          # Search the cache of the base image for an image with the same instruction
          # Returns a layer object
-         layer = cache.search(instruction)
-         if layer:
+         if cache.has_instruction(instruction):
             # Update the current container with the layer
             cache.load(layer)
-
 
    def str_(self):
       return str(self.cmd)
@@ -583,8 +584,7 @@ class Cache(object):
    def __init__(self):
       self.valid = True
       self.repo = None
-      self.base = None
-      self.image = None
+      self.images = None
       self.imagename = None
       self.instructions = []
 
@@ -602,15 +602,17 @@ class Cache(object):
       self.repo = OSTree.Repo.new(repo_file)
       self.repo.create(OSTree.RepoMode.ARCHIVE) 
 
-    def load()
+   def load():
+      pass
       
    # Look for an image in cache that used this instruction
    def search(self, instruction): 
       print("Cache: Searching for " + instruction) 
+        
       # Look at all files in images 
       # 
    
-   def set_base(path):
+   def set_image_directory(self, path):
        self.images = path
        
    # Add a layer to the cache for a base image
