@@ -108,6 +108,9 @@ Additional arguments:
     this directory may not be shared between nodes. Default:
     :code:`$CH_TEST_IMGDIR` if set; otherwise :code:`/var/tmp/img`.
 
+  :code:`--o`, :code:`--one TEST`
+    Select a single test to run. If blank tests will execute based on scope.
+
   :code:`--pack-dir DIR`
     Set packed images directory to :code:`DIR`. Default:
     :code:`$CH_TEST_TARDIR` if set; otherwise :code:`/var/tmp/pack`.
