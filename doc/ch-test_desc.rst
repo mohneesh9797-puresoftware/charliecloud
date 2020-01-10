@@ -92,6 +92,9 @@ Scope is specified with:
     * :code:`full`: All available tests, including all examples. Completion
       time, hot cache: 7–15 minutes; cold cache: 1–2 hours.
 
+    * :code:`single TEST`: Only the specific test denoted after the 'single'
+      argument will ben ran.
+
 Additional arguments:
 
   :code:`-b`, :code:`--builder BUILDER`
@@ -107,9 +110,6 @@ Additional arguments:
     Set unpacked images directory to :code:`DIR`. In a multi-node allocation,
     this directory may not be shared between nodes. Default:
     :code:`$CH_TEST_IMGDIR` if set; otherwise :code:`/var/tmp/img`.
-
-  :code:`--o`, :code:`--one TEST`
-    Select a single test to run. If blank tests will execute based on scope.
 
   :code:`--pack-dir DIR`
     Set packed images directory to :code:`DIR`. Default:
