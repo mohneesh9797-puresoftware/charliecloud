@@ -303,7 +303,9 @@ if [ $cray_mpich ]; then
     queue_files /opt/cray/alps/default/lib64/libalpsutil.so.0.0.0
     queue_files /opt/cray/alps/default/lib64/libalpslli.so.0.0.0
     queue_files /opt/cray/wlm_detect/default/lib64/libwlm_detect.so.0.0.0
-    #queue_files /opt/cray/alps/default/lib64/libalps.so.0.0.0
+    queue_files /usr/lib64/libodbc.so.2
+    queue_files /usr/lib64/libxmlrpc-epi.so.0
+    queue_files /usr/lib64/libltdl.so.7
 fi
 
 if [ $cray_openmpi ]; then
