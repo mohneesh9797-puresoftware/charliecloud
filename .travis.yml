@@ -1,1 +1,5 @@
-test/travis.yml
+jobs:
+      - arch: arm64
+        script: test/travis.yml
+      - arch: amd64
+        script: test/travis.yml
